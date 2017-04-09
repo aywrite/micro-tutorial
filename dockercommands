@@ -1,0 +1,23 @@
+# dbserver
+$ docker run -d -p 5433:5432 --name dbase dbserver
+
+# prepare the database
+$ psql -h localhost -p 5433 -U postgres
+
+>>>postgres=# CREATE TABLE entries (
+...postgres(# id serial PRIMARY KEY,
+...postgres(# title text NOT NULL,
+...postgres(# text text NOT NULL);
+<<< CREATE TABLE
+
+>>>postgres=# \q
+
+# web server
+$ docker run -d -p 5000:5000 --name web1 -e PG_USER='postgres' -e PG_PWORD='' -e PG_HOST=192.168.2.39 -e PG_PORT=5433 -e PG_NAME='postgres' web
+
+# reverse proxy
+docker run -d -p 80:80 --name loader server
+
+# basic benchmarks
+ab -n 1000 -c 100 http://localhost:5000 #no proxy
+ab -n 1000 -c 100 http://localhost:80 # basic proxy
