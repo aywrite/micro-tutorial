@@ -5,29 +5,51 @@ services:
         build: flaskr
         environment:
             PG_HOST: postgres
+            ZP_HOST: zipkin
         expose:
-        - 5000
+            - 5000
         depends_on:
-        - postgres
+            - postgres
+            - zipkin
 
     proxy:
         restart: always
         build: server
         ports:
-        - '80:80'
+            - '80:80'
+            - '9412:9412'
         depends_on:
-        - app
+            - app
+            - zipkin
 
     data:
         image: postgres:latest
         volumes:
-        - /var/lib/postgresql
+            - /var/lib/postgresql
         command: "true"
 
     postgres:
         restart: always
         build: ./dbserver
         volumes_from:
-        - data
+            - data
         ports:
-        - "5433:5432"
+            - '5433:5432'
+
+    storage:
+        image: openzipkin/zipkin-elasticsearch
+        container_name: elasticsearch
+        expose:
+            - 9200
+
+    zipkin:
+        restart: always
+        image: openzipkin/zipkin
+        expose:
+            - 9411
+        environment:
+            - STORAGE_TYPE=elasticsearch
+            - ES_HOSTS=http://elasticsearch:9200
+        depends_on:
+            - storage
+
