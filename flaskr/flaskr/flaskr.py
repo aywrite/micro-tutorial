@@ -35,9 +35,6 @@ Entry = namedtuple('entry', ['title', 'text'])
 
 
 def http_transport(encoded_span):
-    # The collector expects a thrift-encoded list of spans. Instead of
-    # decoding and re-encoding the already thrift-encoded message, we can just
-    # add header bytes that specify that what follows is a list of length 1.
     host = ''.join(['http://', app.config['ZP_HOST'], r':9411/api/v1/spans'])
     body = '\x0c\x00\x00\x00\x01' + encoded_span
     requests.post(
@@ -89,16 +86,26 @@ def close_db(error):
         g.postgres_db.close()
 
 
+def trace(service_name, span_name, sample_rate):
+    def decorator(function):
+        def wrapper(*args, **kwargs):
+            with zipkin_span(
+                service_name=service_name,
+                span_name=span_name,
+                transport_handler=http_transport,
+                sample_rate=sample_rate,
+            ):
+                return function(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
 @app.route('/')
+@trace('new_app', 'new_show_entries', 100)
 def show_entries():
-    with zipkin_span(
-        service_name='default',
-        span_name='entries_endpoint',
-        transport_handler=http_transport,
-        sample_rate=100, # Value between 0.0 and 100.0
-    ):
-        entries = get_entries()
-        return render_template('show_entries.html', entries=entries)
+    entries = get_entries()
+    entries = format_entries(entries)
+    return render_template('show_entries.html', entries=entries)
 
 
 @zipkin_span(service_name='default', span_name='get_entries')
@@ -118,7 +125,7 @@ def format_entries(entries):
     for entry in entries:
         new_entry = Entry(entry.title.title(), entry.text)
         formated_entries.append(new_entry)
-    return new_entry
+    return formated_entries
 
 
 @app.route('/add', methods=['POST'])
